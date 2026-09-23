@@ -20,7 +20,14 @@ import {
   Copy,
   Terminal,
   Server,
-  Key
+  Key,
+  UserPlus,
+  Trash2,
+  Power,
+  Filter,
+  Check,
+  Lock,
+  BadgeCheck
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -45,6 +52,30 @@ export const AdminDashboard: React.FC = () => {
   // System Users state
   const [usersList, setUsersList] = useState<any[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
+  const [createUserLoading, setCreateUserLoading] = useState(false);
+  const [createUserError, setCreateUserError] = useState<string | null>(null);
+  const [createUserSuccess, setCreateUserSuccess] = useState(false);
+
+  // New agent form
+  const [newUserData, setNewUserData] = useState({
+    nom: '',
+    prenom: '',
+    email: '',
+    telephone: '+243 81 ',
+    role: 'agent_instructeur',
+    juridiction_deleguee: 'Parquet de Grande Instance de Kinshasa / Gombe',
+    password: 'Justice2026!'
+  });
+
+  const fetchUsers = () => {
+    fetch('/api/utilisateurs')
+      .then(res => res.json())
+      .then(data => setUsersList(data))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     fetch('/api/db/migrations')
@@ -52,11 +83,62 @@ export const AdminDashboard: React.FC = () => {
       .then(data => setMigrationInfo(data))
       .catch(() => {});
 
-    fetch('/api/utilisateurs')
-      .then(res => res.json())
-      .then(data => setUsersList(data))
-      .catch(() => {});
+    fetchUsers();
   }, []);
+
+  const handleCreateAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateUserLoading(true);
+    setCreateUserError(null);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUserData)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de la création de l\'agent');
+      setCreateUserSuccess(true);
+      fetchUsers();
+      setTimeout(() => {
+        setIsCreateUserOpen(false);
+        setCreateUserSuccess(false);
+        setNewUserData({
+          nom: '',
+          prenom: '',
+          email: '',
+          telephone: '+243 81 ',
+          role: 'agent_instructeur',
+          juridiction_deleguee: 'Parquet de Grande Instance de Kinshasa / Gombe',
+          password: 'Justice2026!'
+        });
+      }, 1000);
+    } catch (err: any) {
+      setCreateUserError(err.message);
+    } finally {
+      setCreateUserLoading(false);
+    }
+  };
+
+  const handleToggleStatus = async (user: any) => {
+    const nextStatus = user.statut === 'actif' ? 'suspendu' : 'actif';
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statut: nextStatus })
+      });
+      if (res.ok) fetchUsers();
+    } catch (err) {}
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Confirmez-vous la suppression de ce compte de la base de données SQL ?')) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      if (res.ok) fetchUsers();
+    } catch (err) {}
+  };
 
   // Compute aggregated indicators (EF07 & Section 10.4)
   const filteredDemandes = selectedProvinceFilter === 'all' 
@@ -557,6 +639,368 @@ export const AdminDashboard: React.FC = () => {
             ))}
           </div>
         </form>
+      )}
+
+      {/* TAB 4: GESTION DES UTILISATEURS & ROLES (RBAC) */}
+      {activeTab === 'utilisateurs' && (
+        <div className="space-y-6">
+          {/* Information & Architecture Notice */}
+          <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-md">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold uppercase">
+                  <BadgeCheck className="w-3 h-3" />
+                  <span>Architecture de Sécurité RBAC Conforme</span>
+                </div>
+                <h2 className="text-base font-bold text-white font-display">
+                  Gestion Centralisée des Agents & Rôles Ministériels
+                </h2>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Le compte Super-Administrateur est provisionné exclusivement via le script CLI (<code className="text-amber-400 font-mono">npm run create:admin</code>). 
+                  Seul l'Administrateur peut créer, affecter et révoquer les agents de l'État (Greffiers, Magistrats, Guichetiers, Vérificateurs). Les Citoyens créent quant à eux leur compte de façon autonome sur la page d'accueil du portail.
+                </p>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-2">
+                <button
+                  onClick={() => setIsCreateUserOpen(true)}
+                  className="px-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Créer un Nouvel Agent</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Comptes SQL</span>
+              <span className="text-xl font-bold font-mono text-slate-900">{usersList.length}</span>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Greffiers Instructeurs</span>
+              <span className="text-xl font-bold font-mono text-indigo-700">
+                {usersList.filter(u => u.role === 'agent_instructeur').length}
+              </span>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Magistrats Valideurs</span>
+              <span className="text-xl font-bold font-mono text-purple-700">
+                {usersList.filter(u => u.role === 'responsable_valideur').length}
+              </span>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Guichets Communaux</span>
+              <span className="text-xl font-bold font-mono text-amber-700">
+                {usersList.filter(u => u.role === 'guichet').length}
+              </span>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Vérificateurs Tiers</span>
+              <span className="text-xl font-bold font-mono text-emerald-700">
+                {usersList.filter(u => u.role === 'organisme_verificateur').length}
+              </span>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider block">Citoyens Inscrits</span>
+              <span className="text-xl font-bold font-mono text-sky-700">
+                {usersList.filter(u => u.role === 'citoyen').length}
+              </span>
+            </div>
+          </div>
+
+          {/* Form Modal for Creating Agent */}
+          {isCreateUserOpen && (
+            <div className="bg-white rounded-2xl border-2 border-sky-500 shadow-xl p-6 relative animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-display">
+                    Création d'un Nouveau Compte Agent de l'État (RBAC)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Le compte sera inséré avec mot de passe haché dans la table relationnelle SQL <code className="text-sky-700 font-mono">utilisateurs</code>.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateUserOpen(false)}
+                  className="px-2.5 py-1 text-xs text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+
+              {createUserError && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{createUserError}</span>
+                </div>
+              )}
+
+              {createUserSuccess && (
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Compte agent créé et provisionné en base SQL avec succès !</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateAgent} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Prénom de l'agent *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Jean-Paul"
+                      value={newUserData.prenom}
+                      onChange={(e) => setNewUserData({ ...newUserData, prenom: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Nom de famille *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Kabasele"
+                      value={newUserData.nom}
+                      onChange={(e) => setNewUserData({ ...newUserData, nom: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Adresse Email Professionnelle *</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="Ex: jp.kabasele@justice.gouv.cd"
+                      value={newUserData.email}
+                      onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Numéro de Téléphone Professionnel</label>
+                    <input
+                      type="text"
+                      value={newUserData.telephone}
+                      onChange={(e) => setNewUserData({ ...newUserData, telephone: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Rôle Attribué (RBAC) *</label>
+                    <select
+                      value={newUserData.role}
+                      onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 font-semibold"
+                    >
+                      <option value="agent_instructeur">Agent Instructeur (Greffe du Parquet)</option>
+                      <option value="responsable_valideur">Responsable Valideur (Magistrat / Procureur)</option>
+                      <option value="guichet">Agent Guichet Communal (Accueil & Numérisation)</option>
+                      <option value="organisme_verificateur">Organisme Vérificateur (Ambassade / Banque)</option>
+                      <option value="administrateur">Administrateur DSI</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Juridiction / Tribunal / Commune d'Affectation *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Parquet de Grande Instance de Kinshasa / Gombe"
+                      value={newUserData.juridiction_deleguee}
+                      onChange={(e) => setNewUserData({ ...newUserData, juridiction_deleguee: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Mot de Passe Initial *</label>
+                  <input
+                    type="password"
+                    required
+                    value={newUserData.password}
+                    onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                    className="w-full max-w-sm px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 font-mono"
+                  />
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    Sera haché cryptographiquement en PBKDF2 SHA-256 avec sel avant insertion.
+                  </span>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateUserOpen(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createUserLoading}
+                    className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {createUserLoading ? 'Enregistrement SQL...' : 'Créer & Enregistrer en Base SQL'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Users List & Search Controls */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 tracking-tight font-display">
+                  Annuaire des Utilisateurs de la Base de Données SQL
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Visualisez les comptes, modifiez leur statut d'activité ou révoquez les accès.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search */}
+                <div className="relative min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Filtrer par nom, email..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                {/* Role Filter */}
+                <select
+                  value={userRoleFilter}
+                  onChange={(e) => setUserRoleFilter(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500 font-semibold"
+                >
+                  <option value="all">Tous les rôles ({usersList.length})</option>
+                  <option value="agent_instructeur">Greffiers Instructeurs</option>
+                  <option value="responsable_valideur">Magistrats Valideurs</option>
+                  <option value="guichet">Agents Guichet</option>
+                  <option value="organisme_verificateur">Vérificateurs Tiers</option>
+                  <option value="administrateur">Administrateurs</option>
+                  <option value="citoyen">Citoyens</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                  <tr>
+                    <th className="py-2.5 px-3 font-semibold">Identifiant SQL</th>
+                    <th className="py-2.5 px-3 font-semibold">Nom & Prénom</th>
+                    <th className="py-2.5 px-3 font-semibold">Email & Téléphone</th>
+                    <th className="py-2.5 px-3 font-semibold">Rôle RBAC</th>
+                    <th className="py-2.5 px-3 font-semibold">Juridiction / Affectation</th>
+                    <th className="py-2.5 px-3 font-semibold">Statut</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {usersList
+                    .filter((u) => {
+                      if (userRoleFilter !== 'all' && u.role !== userRoleFilter) return false;
+                      if (!userSearch) return true;
+                      const q = userSearch.toLowerCase();
+                      return (
+                        u.nom.toLowerCase().includes(q) ||
+                        u.prenom.toLowerCase().includes(q) ||
+                        u.email.toLowerCase().includes(q) ||
+                        u.id.toLowerCase().includes(q) ||
+                        (u.juridiction_deleguee && u.juridiction_deleguee.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((user) => {
+                      const isSuperAdmin = user.id === 'usr-admin-1';
+                      return (
+                        <tr key={user.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-2.5 px-3 font-mono text-[11px] font-semibold text-slate-700">
+                            {user.id}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900">
+                            {user.prenom} {user.nom}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-mono text-slate-700 text-[11px]">{user.email}</div>
+                            <div className="text-slate-400 text-[10px]">{user.telephone}</div>
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                              user.role === 'administrateur' ? 'bg-slate-900 text-white' :
+                              user.role === 'responsable_valideur' ? 'bg-purple-100 text-purple-800' :
+                              user.role === 'agent_instructeur' ? 'bg-indigo-100 text-indigo-800' :
+                              user.role === 'guichet' ? 'bg-amber-100 text-amber-800' :
+                              user.role === 'organisme_verificateur' ? 'bg-emerald-100 text-emerald-800' :
+                              'bg-sky-100 text-sky-800'
+                            }`}>
+                              {user.role.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 text-[11px] max-w-xs truncate">
+                            {user.juridiction_deleguee || '—'}
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${
+                              user.statut === 'actif' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${user.statut === 'actif' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              <span>{user.statut === 'actif' ? 'Actif' : 'Suspendu'}</span>
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                            {!isSuperAdmin ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handleToggleStatus(user)}
+                                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold border transition-colors ${
+                                    user.statut === 'actif' 
+                                      ? 'border-amber-200 text-amber-700 hover:bg-amber-50' 
+                                      : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                                  }`}
+                                  title={user.statut === 'actif' ? 'Suspendre l\'accès' : 'Réactiver le compte'}
+                                >
+                                  {user.statut === 'actif' ? 'Suspendre' : 'Réactiver'}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                  title="Supprimer définitivement de la base SQL"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-mono">Protégé (CLI)</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* TAB 5: JOURNAL D'AUDIT COMPLET (RG04) */}

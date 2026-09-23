@@ -14,8 +14,13 @@ import {
   HelpCircle,
   Building,
   Smartphone,
-  CreditCard
+  CreditCard,
+  LogIn,
+  UserPlus,
+  Lock,
+  UserCheck
 } from 'lucide-react';
+import { AuthModal } from '../auth/AuthModal';
 
 interface CitizenPortalProps {
   onStartNewApplication: () => void;
@@ -28,8 +33,10 @@ export const CitizenPortal: React.FC<CitizenPortalProps> = ({
   onViewDemande,
   onOpenAssistedKiosk
 }) => {
-  const { demandes, parametres } = useCertiStore();
+  const { demandes, parametres, isAuthenticated, currentUser, currentRole } = useCertiStore();
   const [searchRef, setSearchRef] = useState('');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
   const citizenDemandes = demandes.slice(0, 5); // Recent applications
 
@@ -82,6 +89,54 @@ export const CitizenPortal: React.FC<CitizenPortalProps> = ({
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
             Effectuez votre demande en ligne sans intermédiaire ni déplacement physique. Vérification biométrique par selfie en direct, paiement mobile certifié et retrait numérique immédiat avec QR Code infalsifiable.
           </p>
+
+          {/* Authenticated Citizen State or Sign-in Prompt */}
+          {isAuthenticated && currentRole === 'citoyen' ? (
+            <div className="p-3 bg-emerald-950/60 border border-emerald-700/60 rounded-xl text-xs text-emerald-300 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  Connecté en tant que <strong className="text-white">{currentUser.prenom} {currentUser.nom}</strong> ({currentUser.email})
+                </span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-800/80 text-emerald-200 rounded font-semibold uppercase">
+                Compte Citoyen Actif
+              </span>
+            </div>
+          ) : (
+            <div className="p-3 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  Pour déposer une demande officielle en ligne, vous devez posséder un compte citoyen.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthModalMode('login');
+                    setAuthModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Se Connecter</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthModalMode('register');
+                    setAuthModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Créer un Compte</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
             <button
@@ -277,6 +332,16 @@ export const CitizenPortal: React.FC<CitizenPortalProps> = ({
           ))}
         </div>
       </section>
+
+      {/* Modal d'Authentification / Création de compte citoyen */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialMode={authModalMode}
+        onSuccess={() => {
+          setAuthModalOpen(false);
+        }}
+      />
     </div>
   );
 };

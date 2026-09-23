@@ -36,7 +36,7 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
   onCancel,
   isAssistedKiosk = false
 }) => {
-  const { parametres, creerDemande } = useCertiStore();
+  const { parametres, creerDemande, currentUser } = useCertiStore();
 
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
@@ -44,9 +44,9 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
 
   // Form State
   const [formData, setFormData] = useState({
-    nom: '',
+    nom: currentUser?.role === 'citoyen' ? currentUser.nom : '',
     postnom: '',
-    prenom: '',
+    prenom: currentUser?.role === 'citoyen' ? currentUser.prenom : '',
     dateNaissance: '1995-05-12',
     lieuNaissance: 'Kinshasa',
     sexe: 'M' as 'M' | 'F',
@@ -57,12 +57,24 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
     adresse: '',
     commune: 'Gombe',
     villeProvince: 'Kinshasa',
-    telephone: '+243 81 ',
-    email: '',
+    telephone: currentUser?.role === 'citoyen' && currentUser.telephone ? currentUser.telephone : '+243 81 ',
+    email: currentUser?.role === 'citoyen' ? currentUser.email : '',
     profession: '',
     motifDemande: 'Emploi' as 'Emploi' | 'Études / Bourse' | 'Voyage / Visa' | 'Mariage' | 'Concours Administratif' | 'Autre',
     motifPrecision: ''
   });
+
+  React.useEffect(() => {
+    if (currentUser && currentUser.role === 'citoyen') {
+      setFormData(prev => ({
+        ...prev,
+        nom: prev.nom || currentUser.nom,
+        prenom: prev.prenom || currentUser.prenom,
+        email: prev.email || currentUser.email,
+        telephone: prev.telephone && prev.telephone !== '+243 81 ' ? prev.telephone : (currentUser.telephone || '+243 81 ')
+      }));
+    }
+  }, [currentUser]);
 
   // Pieces jointes
   const [pieces, setPieces] = useState<PieceJointe[]>([

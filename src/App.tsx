@@ -11,16 +11,37 @@ import { PublicVerificationPortal } from './components/verifier/PublicVerificati
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { DemandeCertificat, Role } from './types';
 import { useCertiStore } from './services/store';
+import { AuthModal } from './components/auth/AuthModal';
 
 export function App() {
-  const { currentRole, setRole } = useCertiStore();
+  const { currentRole, setRole, isAuthenticated, currentUser } = useCertiStore();
   const [currentTab, setCurrentTab] = useState<string>('citizen');
   const [isAssistedKiosk, setIsAssistedKiosk] = useState(false);
   const [trackingDemande, setTrackingDemande] = useState<DemandeCertificat | undefined>(undefined);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalReason, setAuthModalReason] = useState<string | undefined>(undefined);
+  const [pendingStartWizard, setPendingStartWizard] = useState(false);
 
   const handleStartNewApplication = (assisted = false) => {
+    if (!assisted) {
+      // Vérifier si le citoyen est authentifié
+      if (!isAuthenticated || currentUser?.role !== 'citoyen') {
+        setAuthModalReason('Pour initier une demande officielle de certificat de bonne vie et mœurs, vous devez vous connecter ou créer votre compte citoyen en base de données.');
+        setPendingStartWizard(true);
+        setAuthModalOpen(true);
+        return;
+      }
+    }
     setIsAssistedKiosk(assisted);
     setCurrentTab('new-demande');
+  };
+
+  const handleAuthSuccess = () => {
+    if (pendingStartWizard) {
+      setPendingStartWizard(false);
+      setIsAssistedKiosk(false);
+      setCurrentTab('new-demande');
+    }
   };
 
   const handleWizardSuccess = (createdDemande: DemandeCertificat) => {
@@ -112,6 +133,18 @@ export function App() {
 
       {/* Institutional Footer */}
       <Footer />
+
+      {/* Modal d'Authentification / Création de compte pour citoyen ou agent */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => {
+          setAuthModalOpen(false);
+          setPendingStartWizard(false);
+        }}
+        onSuccess={handleAuthSuccess}
+        reason={authModalReason}
+        initialMode="login"
+      />
     </div>
   );
 }

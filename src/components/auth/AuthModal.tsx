@@ -24,17 +24,34 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  initialMode?: 'login' | 'quick_roles' | 'register';
+  reason?: string;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSuccess,
+  initialMode = 'login',
+  reason
+}) => {
   const { login, register, currentUser, currentRole, isAuthenticated } = useCertiStore();
 
-  const [authMode, setAuthMode] = useState<'login' | 'quick_roles' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'quick_roles' | 'register'>(initialMode);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Sync initialMode when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setAuthMode(initialMode);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+    }
+  }, [isOpen, initialMode]);
 
   // Register form state
   const [registerData, setRegisterData] = useState({
@@ -219,6 +236,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             </p>
           </div>
         </div>
+
+        {/* Reason banner if triggered by a protected action (like new application) */}
+        {reason && (
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold block">Accès réservé aux citoyens authentifiés</span>
+              <span>{reason}</span>
+            </div>
+          </div>
+        )}
 
         {/* Mode Tabs */}
         <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600 my-4">

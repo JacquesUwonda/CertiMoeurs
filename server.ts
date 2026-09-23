@@ -25,7 +25,8 @@ import {
 import { 
   authenticateUserSQL, 
   registerCitizenSQL, 
-  getUserFromTokenSQL 
+  getUserFromTokenSQL,
+  hashPassword 
 } from './src/server/auth';
 import { DemandeCertificat } from './src/types';
 
@@ -169,8 +170,129 @@ app.get('/api/db/migrations', (_req, res) => {
 // Utilisateurs (Pour la gestion des rôles et profils)
 app.get('/api/utilisateurs', (_req, res) => {
   try {
-    const users = db.prepare('SELECT id, nom, prenom, email, telephone, role, statut, juridiction_deleguee, date_creation FROM utilisateurs ORDER BY date_creation DESC').all();
+    const users = db.prepare('SELECT id, nom, prenom, email, telephone, role, statut, juridiction_deleguee, date_creation, derniere_connexion FROM utilisateurs ORDER BY date_creation DESC').all();
     res.json(users);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Création d'un agent / collaborateur par l'Administrateur (RBAC)
+app.post('/api/admin/users', (req, res) => {
+  try {
+    const { nom, prenom, email, telephone, role, juridiction_deleguee, password } = req.body;
+    if (!nom || !prenom || !email || !role) {
+      return res.status(400).json({ error: 'Nom, prénom, email et rôle sont obligatoires.' });
+    }
+
+    const validRoles = ['guichet', 'agent_instructeur', 'responsable_valideur', 'organisme_verificateur', 'administrateur', 'citoyen'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: `Rôle invalide. Rôles autorisés: ${validRoles.join(', ')}` });
+    }
+
+    const prefixMap: Record<string, string> = {
+      guichet: 'usr-guichet',
+      agent_instructeur: 'usr-agent',
+      responsable_valideur: 'usr-valideur',
+      organisme_verificateur: 'usr-verif',
+      administrateur: 'usr-admin',
+      citoyen: 'usr-citoyen'
+    };
+
+    const userId = `${prefixMap[role] || 'usr'}-${Date.now().toString().slice(-6)}`;
+    const passHash = hashPassword(password || 'Justice2026!');
+    const now = new Date().toISOString();
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+
+    db.prepare(`
+      INSERT INTO utilisateurs (
+        id, nom, prenom, email, telephone, role, statut, mot_de_passe_hash, juridiction_deleguee, date_creation
+      ) VALUES (?, ?, ?, ?, ?, ?, 'actif', ?, ?, ?)
+    `).run(
+      userId,
+      nom,
+      prenom,
+      email.trim().toLowerCase(),
+      telephone || '+243 80 000 0000',
+      role,
+      passHash,
+      juridiction_deleguee || 'Ministère de la Justice',
+      now
+    );
+
+    logAuditEntry({
+      acteur: 'Administrateur DSI',
+      roleActeur: 'administrateur',
+      typeAction: 'CREATION_DOSSIER',
+      objetId: userId,
+      details: `Création du compte agent [${prenom} ${nom}] avec le rôle [${role}] rattaché à [${juridiction_deleguee || 'Siège'}]`,
+      ip
+    });
+
+    res.status(201).json({
+      id: userId,
+      nom,
+      prenom,
+      email,
+      telephone,
+      role,
+      statut: 'actif',
+      juridiction_deleguee,
+      date_creation: now
+    });
+  } catch (err: any) {
+    if (err.message?.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ error: 'Un utilisateur avec cette adresse email existe déjà.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mise à jour du statut d'un agent (Actif / Suspendu)
+app.patch('/api/admin/users/:id/status', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { statut } = req.body;
+    if (!statut || !['actif', 'suspendu', 'inactif'].includes(statut)) {
+      return res.status(400).json({ error: 'Statut invalide (actif ou suspendu attendu).' });
+    }
+
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    db.prepare('UPDATE utilisateurs SET statut = ? WHERE id = ?').run(statut, id);
+
+    logAuditEntry({
+      acteur: 'Administrateur DSI',
+      roleActeur: 'administrateur',
+      typeAction: 'INSTRUCTION',
+      objetId: id,
+      details: `Modification du statut de l'utilisateur ${id} vers: ${statut}`,
+      ip
+    });
+
+    res.json({ success: true, id, statut });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Suppression d'un agent
+app.delete('/api/admin/users/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+
+    db.prepare('DELETE FROM utilisateurs WHERE id = ?').run(id);
+
+    logAuditEntry({
+      acteur: 'Administrateur DSI',
+      roleActeur: 'administrateur',
+      typeAction: 'DECISION_REJET',
+      objetId: id,
+      details: `Suppression du compte utilisateur/agent ${id} de la base de données.`,
+      ip
+    });
+
+    res.json({ success: true, id });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
