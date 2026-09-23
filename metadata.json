@@ -1,0 +1,6 @@
+{
+  "name": "CertiMœurs RDC - Digitalisation Bonne Vie et Mœurs",
+  "description": "Portail officiel de dématérialisation du certificat de bonne vie et mœurs en République Démocratique du Congo avec vérification biométrique et paiement mobile.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
