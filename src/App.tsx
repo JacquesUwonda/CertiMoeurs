@@ -4,15 +4,17 @@ import { Footer } from './components/common/Footer';
 import { CitizenPortal } from './components/citizen/CitizenPortal';
 import { NewApplicationWizard } from './components/citizen/NewApplicationWizard';
 import { TrackingView } from './components/tracking/TrackingView';
+import { GuichetPortal } from './components/guichet/GuichetPortal';
 import { InstructorPortal } from './components/agent/InstructorPortal';
 import { ValidatorPortal } from './components/validator/ValidatorPortal';
 import { PublicVerificationPortal } from './components/verifier/PublicVerificationPortal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { DemandeCertificat, Role } from './types';
+import { useCertiStore } from './services/store';
 
 export function App() {
+  const { currentRole, setRole } = useCertiStore();
   const [currentTab, setCurrentTab] = useState<string>('citizen');
-  const [currentRole, setCurrentRole] = useState<Role>('citoyen');
   const [isAssistedKiosk, setIsAssistedKiosk] = useState(false);
   const [trackingDemande, setTrackingDemande] = useState<DemandeCertificat | undefined>(undefined);
 
@@ -33,12 +35,20 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans antialiased">
-      {/* Top Bar Header */}
+      {/* Top Bar Header with Role Switcher */}
       <Header
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         currentRole={currentRole}
-        setRole={setCurrentRole}
+        setRole={(newRole) => {
+          setRole(newRole);
+          if (newRole === 'guichet') setCurrentTab('guichet');
+          else if (newRole === 'agent_instructeur') setCurrentTab('instructor');
+          else if (newRole === 'responsable_valideur') setCurrentTab('validator');
+          else if (newRole === 'administrateur') setCurrentTab('admin');
+          else if (newRole === 'organisme_verificateur') setCurrentTab('verify');
+          else setCurrentTab('citizen');
+        }}
         onOpenAssistedKiosk={() => handleStartNewApplication(true)}
       />
 
@@ -49,7 +59,10 @@ export function App() {
             <NewApplicationWizard
               isAssistedKiosk={isAssistedKiosk}
               onSuccess={handleWizardSuccess}
-              onCancel={() => setCurrentTab('citizen')}
+              onCancel={() => {
+                if (currentRole === 'guichet') setCurrentTab('guichet');
+                else setCurrentTab('citizen');
+              }}
             />
           </div>
         )}
@@ -62,12 +75,20 @@ export function App() {
           />
         )}
 
+        {currentTab === 'guichet' && (
+          <GuichetPortal
+            onStartAssistedApplication={() => handleStartNewApplication(true)}
+            onViewDemande={handleViewDemandeFromPortal}
+          />
+        )}
+
         {currentTab === 'tracking' && (
           <TrackingView
             initialDemande={trackingDemande}
             onBack={() => {
               setTrackingDemande(undefined);
-              setCurrentTab('citizen');
+              if (currentRole === 'guichet') setCurrentTab('guichet');
+              else setCurrentTab('citizen');
             }}
           />
         )}

@@ -177,9 +177,9 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
     setPieces(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
     // RG01: Toute demande reçoit un identifiant unique, un horodatage et un statut initial
-    const nouvelle = creerDemande({
+    const nouvelle = await creerDemande({
       statutActuel: 'soumis',
       modeDepot: isAssistedKiosk ? 'guichet_assiste' : 'en_ligne',
       demandeur: formData,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCertiStore } from '../../services/store';
 import { ParametrageTerritorial } from '../../types';
 import { 
@@ -14,19 +14,49 @@ import {
   Users,
   Smartphone,
   Save,
-  RotateCcw
+  RotateCcw,
+  Database,
+  Code,
+  Copy,
+  Terminal,
+  Server,
+  Key
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
-  const { demandes, auditLogs, parametres, updateParametres, resetToDefault } = useCertiStore();
+  const { demandes, auditLogs, parametres, updateParametres, resetToDefault, dbStatus } = useCertiStore();
 
-  const [activeTab, setActiveTab] = useState<'kpis' | 'parametres' | 'audit'>('kpis');
+  const [activeTab, setActiveTab] = useState<'kpis' | 'parametres' | 'audit' | 'database' | 'utilisateurs'>('kpis');
   const [selectedProvinceFilter, setSelectedProvinceFilter] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
 
   // Editable parameters local state
   const [editingParams, setEditingParams] = useState<ParametrageTerritorial[]>(parametres);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Database migration scripts state
+  const [migrationInfo, setMigrationInfo] = useState<{
+    activeEngine: string;
+    productionReady: string;
+    mysqlScript: string;
+    sqliteScript: string;
+  } | null>(null);
+
+  // System Users state
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/db/migrations')
+      .then(res => res.json())
+      .then(data => setMigrationInfo(data))
+      .catch(() => {});
+
+    fetch('/api/utilisateurs')
+      .then(res => res.json())
+      .then(data => setUsersList(data))
+      .catch(() => {});
+  }, []);
 
   // Compute aggregated indicators (EF07 & Section 10.4)
   const filteredDemandes = selectedProvinceFilter === 'all' 
@@ -66,6 +96,12 @@ export const AdminDashboard: React.FC = () => {
     setTimeout(() => setSaveSuccess(false), 2000);
   };
 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCode(label);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -79,15 +115,15 @@ export const AdminDashboard: React.FC = () => {
             <span className="text-xs text-slate-600 font-semibold">Direction des Systèmes d'Information (Ministère de la Justice)</span>
           </div>
           <h1 className="text-lg font-bold text-slate-900 tracking-tight mt-1 font-display">
-            Tableau de Bord Décisionnel, Paramétrage & Audit
+            Tableau de Bord Décisionnel, Paramétrage, Base SQL & Audit
           </h1>
           <p className="text-xs text-slate-500">
-            Pilotage par les données, indicateurs d'impact (Section 10.4) et journal d'audit cryptographique (RG04).
+            Pilotage par les données (Section 10.4), base de données relationnelle persistante, et journal d'audit cryptographique (RG04).
           </p>
         </div>
 
         {/* Tab switchers */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl">
           <button
             onClick={() => setActiveTab('kpis')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
@@ -95,6 +131,24 @@ export const AdminDashboard: React.FC = () => {
             }`}
           >
             Indicateurs & KPI
+          </button>
+          <button
+            onClick={() => setActiveTab('database')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              activeTab === 'database' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-sky-600" />
+            <span>Base SQL & Migrations</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('utilisateurs')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              activeTab === 'utilisateurs' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Rôles & Comptes (RBAC)</span>
           </button>
           <button
             onClick={() => setActiveTab('parametres')}
@@ -110,7 +164,7 @@ export const AdminDashboard: React.FC = () => {
               activeTab === 'audit' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Journal d'Audit (RG04)
+            Audit (RG04)
           </button>
         </div>
       </div>
@@ -237,7 +291,185 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: PARAMÉTRAGE DES RÈGLES (Section 5.1 & 3.2: Des règles configurables sans modifier le code) */}
+      {/* TAB 2: BASE DE DONNÉES & SCRIPTS DE MIGRATION SQL */}
+      {activeTab === 'database' && (
+        <div className="space-y-6">
+          {/* Active DB Banner */}
+          <div className="bg-linear-to-r from-slate-900 to-sky-950 text-white p-6 rounded-3xl shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-400/30 flex items-center justify-center text-sky-400">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-sky-300">
+                    INFRASTRUCTURE DE STOCKAGE RELATIONNEL ACTIF
+                  </span>
+                  <h2 className="text-base font-bold">
+                    {dbStatus?.engine || 'SQLite 3 (Moteur Relational Embarqué)'}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{dbStatus?.status || 'OPÉRATIONNEL'}</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-2 border-t border-slate-800 font-mono">
+              <div>
+                <span className="text-slate-400 block text-[10px]">Emplacement :</span>
+                <span className="text-sky-200 truncate block">./database/certimoeurs.sqlite</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Taille fichier :</span>
+                <span className="text-sky-200">{dbStatus?.fileSizeHuman || 'Calcul en cours'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Tables Actives :</span>
+                <span className="text-emerald-400 font-bold">{dbStatus?.tablesCount || 12} tables SQL</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Mode Journal :</span>
+                <span className="text-amber-300 font-bold">WAL (Write-Ahead Logging)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Table of Tables and Row Counts */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Tables du Modèle Conceptuel de Données (MCD Section 7.3)
+              </h3>
+              <span className="text-[11px] text-slate-400 font-mono">
+                Total enregistrements synchronisés
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
+              {dbStatus?.tableRows && Object.entries(dbStatus.tableRows).map(([tbl, count]) => (
+                <div key={tbl} className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                  <div>
+                    <span className="font-mono text-xs font-bold text-slate-800 block">{tbl}</span>
+                    <span className="text-[10px] text-slate-400">table relationnelle</span>
+                  </div>
+                  <span className="font-mono text-sm font-black text-sky-800 bg-sky-100 px-2 py-0.5 rounded">
+                    {count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Migration Scripts Section (MySQL & SQLite) */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-sky-600" />
+                  <span>Scripts de Migration SQL Prêts pour Déploiement Local / MySQL</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Conformément aux exigences, le script DDL complet pour MySQL 8 / MariaDB est généré et prêt à être injecté.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => copyToClipboard(migrationInfo?.mysqlScript || '', 'mysql')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{copiedCode === 'mysql' ? 'Copié !' : 'Copier Script MySQL'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Command Instruction */}
+            <div className="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs space-y-2 border border-slate-800">
+              <div className="text-slate-400 text-[11px] flex items-center justify-between">
+                <span>COMMANDE D'EXÉCUTION SUR SERVEUR MYSQL LOCAL :</span>
+                <span className="text-amber-400">Prêt à l'emploi</span>
+              </div>
+              <div className="text-sky-300 select-all">
+                mysql -u root -p &lt; database/migrations/001_create_tables_mysql.sql
+              </div>
+              <div className="text-emerald-300 select-all">
+                mysql -u root -p certimoeurs_rdc &lt; database/seeds/001_seed_initial_data.sql
+              </div>
+            </div>
+
+            {/* Code Preview */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-700 block">
+                Extrait DDL MySQL (001_create_tables_mysql.sql) :
+              </span>
+              <pre className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-mono text-slate-800 overflow-x-auto max-h-64 overflow-y-auto">
+                {migrationInfo?.mysqlScript || '-- Chargement du script SQL...'}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: RÔLES & COMPTES DU SYSTÈME (RBAC - Section 3.1 & RG03) */}
+      {activeTab === 'utilisateurs' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight font-display flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span>Gestion des Rôles & Accès Sécurisés (RBAC - Règle RG03)</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                "Seul un agent disposant du rôle requis peut consulter, modifier l'instruction ou décider."
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr>
+                  <th className="py-2.5 px-3 font-semibold">Identifiant</th>
+                  <th className="py-2.5 px-3 font-semibold">Nom & Prénom</th>
+                  <th className="py-2.5 px-3 font-semibold">Email / Contact</th>
+                  <th className="py-2.5 px-3 font-semibold">Rôle Métier Attribué</th>
+                  <th className="py-2.5 px-3 font-semibold">Juridiction / Délégation</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {usersList.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50/60">
+                    <td className="py-2.5 px-3 font-mono font-bold text-sky-800">{u.id}</td>
+                    <td className="py-2.5 px-3 font-semibold text-slate-900">{u.nom} {u.prenom}</td>
+                    <td className="py-2.5 px-3 text-slate-600">{u.email}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 uppercase">
+                        {u.role.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600 text-[11px]">{u.juridiction_deleguee || 'Non assigné'}</td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span>Actif</span>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: PARAMÉTRAGE DES RÈGLES (Section 5.1 & 3.2: Des règles configurables sans modifier le code) */}
       {activeTab === 'parametres' && (
         <form onSubmit={handleSaveParams} className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-6">
           <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -327,7 +559,7 @@ export const AdminDashboard: React.FC = () => {
         </form>
       )}
 
-      {/* TAB 3: JOURNAL D'AUDIT COMPLET (RG04) */}
+      {/* TAB 5: JOURNAL D'AUDIT COMPLET (RG04) */}
       {activeTab === 'audit' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">

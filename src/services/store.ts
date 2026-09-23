@@ -10,19 +10,105 @@ import {
 } from '../types';
 import { INITIAL_DEMANDES, INITIAL_AUDIT_LOGS, PARAMETRAGES_PROVINCES } from '../data/mockData';
 
+export interface DatabaseStatusInfo {
+  engine: string;
+  driver: string;
+  path: string;
+  fileSizeBytes: number;
+  fileSizeHuman: string;
+  status: string;
+  tablesCount: number;
+  tableRows: Record<string, number>;
+  walMode: boolean;
+  foreignKeys: boolean;
+}
+
+export interface UserProfile {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone?: string;
+  role: Role;
+  juridiction_deleguee?: string;
+}
+
 const STORAGE_KEYS = {
-  DEMANDES: 'certimoeurs_rdc_demandes_v1',
-  AUDIT: 'certimoeurs_rdc_audit_v1',
-  PARAMETRES: 'certimoeurs_rdc_parametres_v1',
-  ROLE: 'certimoeurs_rdc_current_role_v1',
-  CURRENT_USER_NAME: 'certimoeurs_rdc_user_name_v1'
+  ROLE: 'certimoeurs_rdc_current_role_v2',
+  CURRENT_USER: 'certimoeurs_rdc_user_profile_v2',
+  AUTH_TOKEN: 'certimoeurs_rdc_auth_token_v2'
+};
+
+const DEFAULT_USERS: Record<Role, UserProfile> = {
+  citoyen: {
+    id: 'usr-citoyen-1',
+    nom: 'Mwamba',
+    prenom: 'Dieudonné',
+    email: 'dieudonne.mwamba@gmail.com',
+    telephone: '+243 81 234 5678',
+    role: 'citoyen',
+    juridiction_deleguee: 'Kinshasa / Gombe'
+  },
+  guichet: {
+    id: 'usr-guichet-1',
+    nom: 'Tshimanga',
+    prenom: 'Mireille',
+    email: 'guichet.lingwala@justice.gouv.cd',
+    telephone: '+243 82 000 9911',
+    role: 'guichet',
+    juridiction_deleguee: 'Maison Communale de Lingwala (Kinshasa)'
+  },
+  agent_instructeur: {
+    id: 'usr-agent-1',
+    nom: 'Kabasele',
+    prenom: 'Jean-Paul',
+    email: 'jp.kabasele@justice.gouv.cd',
+    telephone: '+243 81 555 4321',
+    role: 'agent_instructeur',
+    juridiction_deleguee: 'Parquet de Grande Instance de Kinshasa / Gombe'
+  },
+  responsable_valideur: {
+    id: 'usr-valideur-1',
+    nom: 'Malamba',
+    prenom: 'Antoine',
+    email: 'a.malamba@justice.gouv.cd',
+    telephone: '+243 89 000 2233',
+    role: 'responsable_valideur',
+    juridiction_deleguee: 'Procureur de la République près le TGI Kinshasa/Gombe'
+  },
+  administrateur: {
+    id: 'usr-admin-1',
+    nom: 'Kasongo',
+    prenom: 'Patrick',
+    email: 'admin.dsi@justice.gouv.cd',
+    telephone: '+243 84 000 0001',
+    role: 'administrateur',
+    juridiction_deleguee: "Direction des Systèmes d'Information - Ministère de la Justice"
+  },
+  organisme_verificateur: {
+    id: 'usr-verif-1',
+    nom: 'Dubois',
+    prenom: 'Claire',
+    email: 'visas.rdc@diplomatie.be',
+    telephone: '+32 2 501 8111',
+    role: 'organisme_verificateur',
+    juridiction_deleguee: 'Section Consulaire - Ambassade de Belgique'
+  }
 };
 
 export class CertiStore {
   private static listeners: Array<() => void> = [];
+  private static inMemoryDemandes: DemandeCertificat[] = INITIAL_DEMANDES;
+  private static inMemoryAuditLogs: ActionAudit[] = INITIAL_AUDIT_LOGS;
+  private static inMemoryParametres: ParametrageTerritorial[] = PARAMETRAGES_PROVINCES;
+  private static dbStatus: DatabaseStatusInfo | null = null;
+  private static isInitialized = false;
 
   static subscribe(listener: () => void) {
     this.listeners.push(listener);
+    if (!this.isInitialized) {
+      this.init();
+    }
     return () => {
       this.listeners = this.listeners.filter(l => l !== listener);
     };
@@ -32,57 +118,64 @@ export class CertiStore {
     this.listeners.forEach(l => l());
   }
 
-  static getDemandes(): DemandeCertificat[] {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.DEMANDES);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // ignore
-    }
-    return INITIAL_DEMANDES;
+  static async init() {
+    this.isInitialized = true;
+    await this.fetchFromBackend();
   }
 
-  static saveDemandes(demandes: DemandeCertificat[]) {
-    localStorage.setItem(STORAGE_KEYS.DEMANDES, JSON.stringify(demandes));
-    this.notify();
+  static async fetchFromBackend() {
+    try {
+      const [resDemandes, resAudit, resParams, resStatus] = await Promise.all([
+        fetch('/api/demandes'),
+        fetch('/api/audit'),
+        fetch('/api/parametres'),
+        fetch('/api/db/status')
+      ]);
+
+      if (resDemandes.ok) {
+        this.inMemoryDemandes = await resDemandes.json();
+      }
+      if (resAudit.ok) {
+        this.inMemoryAuditLogs = await resAudit.json();
+      }
+      if (resParams.ok) {
+        this.inMemoryParametres = await resParams.json();
+      }
+      if (resStatus.ok) {
+        this.dbStatus = await resStatus.json();
+      }
+      this.notify();
+    } catch (err) {
+      console.warn('Backend API connection check (running with local cache if needed):', err);
+    }
+  }
+
+  static getDemandes(): DemandeCertificat[] {
+    return this.inMemoryDemandes;
   }
 
   static getAuditLogs(): ActionAudit[] {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.AUDIT);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // ignore
-    }
-    return INITIAL_AUDIT_LOGS;
-  }
-
-  static logAudit(action: Omit<ActionAudit, 'id' | 'horodatage' | 'adresseIP'>) {
-    const logs = this.getAuditLogs();
-    const newEntry: ActionAudit = {
-      ...action,
-      id: `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      horodatage: new Date().toISOString(),
-      adresseIP: '197.157.210.' + Math.floor(Math.random() * 200 + 1)
-    };
-    const updated = [newEntry, ...logs];
-    localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify(updated));
-    this.notify();
+    return this.inMemoryAuditLogs;
   }
 
   static getParametres(): ParametrageTerritorial[] {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.PARAMETRES);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // ignore
-    }
-    return PARAMETRAGES_PROVINCES;
+    return this.inMemoryParametres;
   }
 
-  static updateParametres(params: ParametrageTerritorial[]) {
-    localStorage.setItem(STORAGE_KEYS.PARAMETRES, JSON.stringify(params));
-    this.notify();
+  static getDbStatus(): DatabaseStatusInfo | null {
+    return this.dbStatus;
+  }
+
+  static getAuthToken(): string | null {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    } catch {
+      return null;
+    }
+  }
+
+  static isAuthenticated(): boolean {
+    return !!this.getAuthToken();
   }
 
   static getRole(): Role {
@@ -95,40 +188,134 @@ export class CertiStore {
     return 'citoyen';
   }
 
-  static setRole(role: Role) {
+  static async setRole(role: Role) {
     localStorage.setItem(STORAGE_KEYS.ROLE, role);
+    const defaultUser = DEFAULT_USERS[role];
+    if (defaultUser) {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(defaultUser));
+      // Authenticate against database API to log session and update last connection
+      try {
+        await this.login(defaultUser.email, 'Justice2026!');
+      } catch {
+        // fallback
+      }
+    }
+    this.notify();
+  }
+
+  static async login(identifier: string, password = 'Justice2026!'): Promise<{ success: boolean; error?: string; user?: UserProfile }> {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Identifiant ou mot de passe incorrect' };
+      }
+
+      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.token);
+      localStorage.setItem(STORAGE_KEYS.ROLE, data.user.role);
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(data.user));
+
+      await this.fetchFromBackend();
+      this.notify();
+      return { success: true, user: data.user };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Erreur réseau de connexion' };
+    }
+  }
+
+  static async register(data: {
+    nom: string;
+    prenom: string;
+    email: string;
+    telephone: string;
+    password: string;
+    commune?: string;
+    villeProvince?: string;
+  }): Promise<{ success: boolean; error?: string; user?: UserProfile }> {
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        return { success: false, error: resData.error || 'Erreur lors de la création du compte' };
+      }
+
+      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, resData.token);
+      localStorage.setItem(STORAGE_KEYS.ROLE, resData.user.role);
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(resData.user));
+
+      await this.fetchFromBackend();
+      this.notify();
+      return { success: true, user: resData.user };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Erreur réseau de création' };
+    }
+  }
+
+  static async logout() {
+    const user = this.getCurrentUser();
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.id,
+          nomComplet: `${user?.prenom} ${user?.nom}`,
+          role: user?.role
+        })
+      });
+    } catch {
+      // ignore
+    }
+
+    localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    localStorage.setItem(STORAGE_KEYS.ROLE, 'citoyen');
+    this.notify();
+  }
+
+  static getCurrentUser(): UserProfile {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return DEFAULT_USERS[this.getRole()];
+  }
+
+  static setCurrentUser(user: UserProfile) {
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
     this.notify();
   }
 
   static getUserName(): string {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_NAME);
-      if (saved) return saved;
-    } catch {
-      // ignore
-    }
-    return 'Citoyen';
+    const user = this.getCurrentUser();
+    return `${user.prenom} ${user.nom}`;
   }
 
-  static setUserName(name: string) {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER_NAME, name);
-    this.notify();
-  }
+  // --- Opérations Métier SQL Backend ---
 
-  // --- Opérations Métier ---
-
-  static creerDemande(nouvelleDemande: Omit<DemandeCertificat, 'id' | 'numeroReference' | 'dateCreation' | 'derniereMiseAJour' | 'historiqueStatuts'>): DemandeCertificat {
+  static async creerDemande(nouvelleDemande: Omit<DemandeCertificat, 'id' | 'numeroReference' | 'dateCreation' | 'derniereMiseAJour' | 'historiqueStatuts'>): Promise<DemandeCertificat> {
     const provinceCode = nouvelleDemande.demandeur.villeProvince.slice(0, 3).toUpperCase() || 'RDC';
     const randNum = Math.floor(100000 + Math.random() * 900000);
     const ref = `CBVM-2026-${provinceCode}-${randNum}`;
     const now = new Date().toISOString();
 
-    const demande: DemandeCertificat = {
+    const payload: DemandeCertificat = {
       ...nouvelleDemande,
       id: `dem-${Date.now()}`,
       numeroReference: ref,
       dateCreation: now,
       derniereMiseAJour: now,
+      statutActuel: nouvelleDemande.statutActuel || 'soumis',
       historiqueStatuts: [
         {
           id: `hist-${Date.now()}`,
@@ -143,24 +330,31 @@ export class CertiStore {
       ]
     };
 
-    const demandes = this.getDemandes();
-    this.saveDemandes([demande, ...demandes]);
+    // Optimistic UI update
+    this.inMemoryDemandes = [payload, ...this.inMemoryDemandes];
+    this.notify();
 
-    this.logAudit({
-      acteur: `${demande.demandeur.prenom} ${demande.demandeur.nom}`,
-      roleActeur: demande.modeDepot === 'guichet_assiste' ? 'Guichet' : 'Demandeur',
-      typeAction: 'CREATION_DOSSIER',
-      objetId: demande.numeroReference,
-      details: `Création du dossier de demande [${demande.numeroReference}] pour ${demande.demandeur.nom} ${demande.demandeur.prenom} (${demande.demandeur.commune}, ${demande.demandeur.villeProvince})`
-    });
+    try {
+      const res = await fetch('/api/demandes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        this.fetchFromBackend();
+        return saved;
+      }
+    } catch (e) {
+      console.error('Error saving to SQL backend:', e);
+    }
 
-    return demande;
+    return payload;
   }
 
   static getDemandeParReference(refOrPhone: string): DemandeCertificat | undefined {
     const cleaned = refOrPhone.trim().toLowerCase();
-    const demandes = this.getDemandes();
-    return demandes.find(d => 
+    return this.inMemoryDemandes.find(d => 
       d.numeroReference.toLowerCase() === cleaned || 
       d.id.toLowerCase() === cleaned ||
       d.demandeur.telephone.replace(/\s+/g, '') === cleaned.replace(/\s+/g, '') ||
@@ -169,41 +363,9 @@ export class CertiStore {
     );
   }
 
-  static updateStatut(id: string, nouveauStatut: StatutDemande, auteur: string, roleAuteur: string, commentaire: string) {
-    const demandes = this.getDemandes();
+  static async agentPrendreEnCharge(id: string, agentNom: string, agentId: string) {
     const now = new Date().toISOString();
-    const updated = demandes.map(d => {
-      if (d.id === id) {
-        return {
-          ...d,
-          statutActuel: nouveauStatut,
-          derniereMiseAJour: now,
-          historiqueStatuts: [
-            ...d.historiqueStatuts,
-            {
-              id: `hist-${Date.now()}`,
-              statut: nouveauStatut,
-              dateChangement: now,
-              auteur,
-              roleAuteur,
-              commentaire
-            }
-          ]
-        };
-      }
-      return d;
-    });
-
-    this.saveDemandes(updated);
-  }
-
-  static agentPrendreEnCharge(id: string, agentNom: string, agentId: string) {
-    const demandes = this.getDemandes();
-    const now = new Date().toISOString();
-    const target = demandes.find(d => d.id === id);
-    if (!target) return;
-
-    const updated = demandes.map(d => {
+    this.inMemoryDemandes = this.inMemoryDemandes.map(d => {
       if (d.id === id) {
         return {
           ...d,
@@ -230,24 +392,27 @@ export class CertiStore {
       }
       return d;
     });
+    this.notify();
 
-    this.saveDemandes(updated);
-    this.logAudit({
-      acteur: agentNom,
-      roleActeur: 'Agent Instructeur',
-      typeAction: 'INSTRUCTION',
-      objetId: target.numeroReference,
-      details: `Prise en charge du dossier ${target.numeroReference}`
-    });
+    try {
+      await fetch(`/api/demandes/${id}/instruction`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actionType: 'PRENDRE_EN_CHARGE',
+          nomAgent: agentNom,
+          agentId
+        })
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  static agentVerifierCasier(id: string, agentNom: string, mention: 'NEANT' | 'CONDAMNATION_EXISTANTE', registreRef: string, parquetLieu: string) {
-    const demandes = this.getDemandes();
+  static async agentVerifierCasier(id: string, agentNom: string, mention: 'NEANT' | 'CONDAMNATION_EXISTANTE', registreRef: string, parquetLieu: string) {
     const now = new Date().toISOString();
-    const target = demandes.find(d => d.id === id);
-    if (!target) return;
-
-    const updated = demandes.map(d => {
+    this.inMemoryDemandes = this.inMemoryDemandes.map(d => {
       if (d.id === id) {
         return {
           ...d,
@@ -268,24 +433,29 @@ export class CertiStore {
       }
       return d;
     });
+    this.notify();
 
-    this.saveDemandes(updated);
-    this.logAudit({
-      acteur: agentNom,
-      roleActeur: 'Agent Instructeur',
-      typeAction: 'INSTRUCTION',
-      objetId: target.numeroReference,
-      details: `Vérification du casier judiciaire central: Mention [${mention}] (Réf: ${registreRef})`
-    });
+    try {
+      await fetch(`/api/demandes/${id}/instruction`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actionType: 'VERIFIER_CASIER',
+          nomAgent: agentNom,
+          mentionCasier: mention,
+          registreRef,
+          parquetLieu
+        })
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  static agentDemanderComplement(id: string, agentNom: string, motif: string, piecesDemandees: string[]) {
-    const demandes = this.getDemandes();
+  static async agentDemanderComplement(id: string, agentNom: string, motif: string, piecesDemandees: string[]) {
     const now = new Date().toISOString();
-    const target = demandes.find(d => d.id === id);
-    if (!target) return;
-
-    const updated = demandes.map(d => {
+    this.inMemoryDemandes = this.inMemoryDemandes.map(d => {
       if (d.id === id) {
         return {
           ...d,
@@ -315,24 +485,28 @@ export class CertiStore {
       }
       return d;
     });
+    this.notify();
 
-    this.saveDemandes(updated);
-    this.logAudit({
-      acteur: agentNom,
-      roleActeur: 'Agent Instructeur',
-      typeAction: 'DEMANDE_COMPLEMENT',
-      objetId: target.numeroReference,
-      details: `Demande de complément de dossier: ${motif}`
-    });
+    try {
+      await fetch(`/api/demandes/${id}/instruction`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actionType: 'DEMANDER_COMPLEMENT',
+          nomAgent: agentNom,
+          motif,
+          piecesDemandees
+        })
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  static citoyenDeposerComplement(id: string, pieces: PieceJointe[], noteCitoyen: string) {
-    const demandes = this.getDemandes();
+  static async citoyenDeposerComplement(id: string, pieces: PieceJointe[], noteCitoyen: string) {
     const now = new Date().toISOString();
-    const target = demandes.find(d => d.id === id);
-    if (!target) return;
-
-    const updated = demandes.map(d => {
+    this.inMemoryDemandes = this.inMemoryDemandes.map(d => {
       if (d.id === id) {
         return {
           ...d,
@@ -361,26 +535,28 @@ export class CertiStore {
       }
       return d;
     });
+    this.notify();
 
-    this.saveDemandes(updated);
-    this.logAudit({
-      acteur: `${target.demandeur.prenom} ${target.demandeur.nom}`,
-      roleActeur: 'Demandeur',
-      typeAction: 'TELEVERSEMENT_PIECE',
-      objetId: target.numeroReference,
-      details: `Dépôt de ${pieces.length} pièce(s) complémentaire(s)`
-    });
+    try {
+      await fetch(`/api/demandes/${id}/complement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pieces,
+          noteCitoyen
+        })
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  static agentProposerDecision(id: string, agentNom: string, avis: 'FAVORABLE' | 'DEFAVORABLE', note: string) {
-    const demandes = this.getDemandes();
+  static async agentProposerDecision(id: string, agentNom: string, avis: 'FAVORABLE' | 'DEFAVORABLE', note: string) {
     const now = new Date().toISOString();
-    const target = demandes.find(d => d.id === id);
-    if (!target) return;
-
     const nouveauStatut: StatutDemande = avis === 'FAVORABLE' ? 'avis_favorable' : 'avis_defavorable';
 
-    const updated = demandes.map(d => {
+    this.inMemoryDemandes = this.inMemoryDemandes.map(d => {
       if (d.id === id) {
         return {
           ...d,
@@ -407,31 +583,37 @@ export class CertiStore {
       }
       return d;
     });
+    this.notify();
 
-    this.saveDemandes(updated);
-    this.logAudit({
-      acteur: agentNom,
-      roleActeur: 'Agent Instructeur',
-      typeAction: 'INSTRUCTION',
-      objetId: target.numeroReference,
-      details: `Avis d'instruction émis: [${avis}] - ${note}`
-    });
+    try {
+      await fetch(`/api/demandes/${id}/instruction`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actionType: 'PROPOSER_DECISION',
+          nomAgent: agentNom,
+          avis,
+          note
+        })
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  static responsableValiderEtDelivrer(id: string, responsableNom: string, titreResponsable: string, autoriteEmettrice: string) {
-    const demandes = this.getDemandes();
+  static async responsableValiderEtDelivrer(id: string, responsableNom: string, titreResponsable: string, autoriteEmettrice: string) {
     const now = new Date();
     const nowISO = now.toISOString();
-    const target = demandes.find(d => d.id === id);
+    const target = this.inMemoryDemandes.find(d => d.id === id);
     if (!target) return;
 
-    // Expiration à 3 mois (90 jours) légale
     const expiration = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
     const numCert = `RDC-JUS-CBVM-2026-${target.numeroReference.split('-').pop() || Date.now()}`;
     const hash = `sha256:${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
     const qrUrl = `https://justice.gouv.cd/verifier?ref=${numCert}&h=${hash.substring(7, 15)}`;
 
-    const updated = demandes.map(d => {
+    this.inMemoryDemandes = this.inMemoryDemandes.map(d => {
       if (d.id === id) {
         return {
           ...d,
@@ -474,24 +656,28 @@ export class CertiStore {
       }
       return d;
     });
+    this.notify();
 
-    this.saveDemandes(updated);
-    this.logAudit({
-      acteur: responsableNom,
-      roleActeur: 'Responsable Valideur',
-      typeAction: 'DECISION_VALIDATION',
-      objetId: target.numeroReference,
-      details: `Validation et signature du certificat ${numCert} pour ${target.demandeur.nom} ${target.demandeur.prenom}`
-    });
+    try {
+      await fetch(`/api/demandes/${id}/decision`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decisionType: 'APPROUVE',
+          responsableNom,
+          titreResponsable,
+          autoriteEmettrice
+        })
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  static responsableRejeter(id: string, responsableNom: string, titreResponsable: string, motif: string, voiesRecours: string) {
-    const demandes = this.getDemandes();
+  static async responsableRejeter(id: string, responsableNom: string, titreResponsable: string, motif: string, voiesRecours: string) {
     const now = new Date().toISOString();
-    const target = demandes.find(d => d.id === id);
-    if (!target) return;
-
-    const updated = demandes.map(d => {
+    this.inMemoryDemandes = this.inMemoryDemandes.map(d => {
       if (d.id === id) {
         return {
           ...d,
@@ -522,47 +708,44 @@ export class CertiStore {
       }
       return d;
     });
+    this.notify();
 
-    this.saveDemandes(updated);
-    this.logAudit({
-      acteur: responsableNom,
-      roleActeur: 'Responsable Valideur',
-      typeAction: 'DECISION_REJET',
-      objetId: target.numeroReference,
-      details: `Demande rejetée: ${motif}`
-    });
+    try {
+      await fetch(`/api/demandes/${id}/decision`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decisionType: 'REJETE',
+          responsableNom,
+          titreResponsable,
+          motif,
+          voiesRecours
+        })
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   // --- Vérification Publique Tiers (RG05) ---
   static verifierCertificatPublic(codeOuRef: string): VerificationPubliqueResult {
     const cleaned = codeOuRef.trim().toLowerCase();
-    const demandes = this.getDemandes();
-
-    this.logAudit({
-      acteur: 'Organisme Vérificateur Externe',
-      roleActeur: 'Vérificateur',
-      typeAction: 'VERIFICATION_TIERS',
-      objetId: codeOuRef,
-      details: `Tentative de vérification publique pour le code/référence [${codeOuRef}]`
-    });
-
-    const match = demandes.find(d => 
+    const match = this.inMemoryDemandes.find(d => 
       (d.certificat && d.certificat.numeroCertificat.toLowerCase() === cleaned) ||
       d.numeroReference.toLowerCase() === cleaned ||
       (d.certificat && d.certificat.empreinteHashSHA256.toLowerCase().includes(cleaned))
     );
+
+    // Call backend async for audit logging
+    fetch(`/api/verify/${encodeURIComponent(codeOuRef)}`).catch(() => {});
 
     if (!match || !match.certificat) {
       return { trouve: false };
     }
 
     const { certificat, demandeur } = match;
-    const prenom = demandeur.prenom;
-    const nom = demandeur.nom;
-    // Masquage respectueux RG05
-    const nomMasque = `${nom} ${prenom.charAt(0)}.`;
-
-    // Calcul de validité
+    const nomMasque = `${demandeur.nom} ${demandeur.prenom.charAt(0)}.`;
     const now = new Date();
     const dateExp = new Date(certificat.dateExpiration);
     let statut: 'VALIDE' | 'REVOQUE' | 'EXPIRE' = certificat.statut;
@@ -584,10 +767,26 @@ export class CertiStore {
     };
   }
 
+  static async updateParametres(params: ParametrageTerritorial[]) {
+    this.inMemoryParametres = params;
+    this.notify();
+
+    try {
+      await fetch('/api/parametres', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      this.fetchFromBackend();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   static resetToDefault() {
-    localStorage.removeItem(STORAGE_KEYS.DEMANDES);
-    localStorage.removeItem(STORAGE_KEYS.AUDIT);
-    localStorage.removeItem(STORAGE_KEYS.PARAMETRES);
+    this.inMemoryDemandes = INITIAL_DEMANDES;
+    this.inMemoryAuditLogs = INITIAL_AUDIT_LOGS;
+    this.inMemoryParametres = PARAMETRAGES_PROVINCES;
     this.notify();
   }
 }
@@ -603,10 +802,18 @@ export function useCertiStore() {
     demandes: CertiStore.getDemandes(),
     auditLogs: CertiStore.getAuditLogs(),
     parametres: CertiStore.getParametres(),
+    dbStatus: CertiStore.getDbStatus(),
     currentRole: CertiStore.getRole(),
+    currentUser: CertiStore.getCurrentUser(),
     userName: CertiStore.getUserName(),
+    isAuthenticated: CertiStore.isAuthenticated(),
+    authToken: CertiStore.getAuthToken(),
+    login: (id: string, pwd?: string) => CertiStore.login(id, pwd),
+    register: (data: any) => CertiStore.register(data),
+    logout: () => CertiStore.logout(),
     setRole: (role: Role) => CertiStore.setRole(role),
-    setUserName: (name: string) => CertiStore.setUserName(name),
+    setCurrentUser: (user: UserProfile) => CertiStore.setCurrentUser(user),
+    refreshData: () => CertiStore.fetchFromBackend(),
     creerDemande: (d: any) => CertiStore.creerDemande(d),
     getDemandeParReference: (ref: string) => CertiStore.getDemandeParReference(ref),
     agentPrendreEnCharge: (id: string, nom: string, agtId: string) => CertiStore.agentPrendreEnCharge(id, nom, agtId),
@@ -617,7 +824,6 @@ export function useCertiStore() {
     responsableValiderEtDelivrer: (id: string, respNom: string, titre: string, aut: string) => CertiStore.responsableValiderEtDelivrer(id, respNom, titre, aut),
     responsableRejeter: (id: string, respNom: string, titre: string, motif: string, recours: string) => CertiStore.responsableRejeter(id, respNom, titre, motif, recours),
     verifierCertificatPublic: (code: string) => CertiStore.verifierCertificatPublic(code),
-    logAudit: (log: any) => CertiStore.logAudit(log),
     updateParametres: (params: ParametrageTerritorial[]) => CertiStore.updateParametres(params),
     resetToDefault: () => CertiStore.resetToDefault()
   };
