@@ -44,7 +44,7 @@ Conçue dans le respect strict des spécifications fonctionnelles ministérielle
 ```bash
 # Cloner le dépôt
 git clone <url-du-depot>
-cd certimoeurs-rdc
+cd certimoeurs
 
 # Installer l'ensemble des dépendances
 npm install

@@ -1,43 +1,35 @@
+import {
+  AlertCircle,
+  CheckCircle2,
+  Database,
+  KeyRound,
+  Lock,
+  LogIn,
+  UserPlus,
+  X
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useCertiStore } from '../../services/store';
-import { Role } from '../../types';
 import { RdcEmblem } from '../common/RdcEmblem';
-import { 
-  Lock, 
-  User, 
-  Building2, 
-  FileText, 
-  ShieldCheck, 
-  Sliders, 
-  Search, 
-  CheckCircle2, 
-  AlertCircle, 
-  LogIn, 
-  UserPlus, 
-  X,
-  KeyRound,
-  Database,
-  ArrowRight
-} from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  initialMode?: 'login' | 'quick_roles' | 'register';
+  initialMode?: 'login' | 'register';
   reason?: string;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ 
-  isOpen, 
-  onClose, 
+export const AuthModal: React.FC<AuthModalProps> = ({
+  isOpen,
+  onClose,
   onSuccess,
   initialMode = 'login',
   reason
 }) => {
   const { login, register, currentUser, currentRole, isAuthenticated } = useCertiStore();
 
-  const [authMode, setAuthMode] = useState<'login' | 'quick_roles' | 'register'>(initialMode);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>(initialMode);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,78 +58,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const testAccounts: Array<{
-    id: string;
-    role: Role;
-    label: string;
-    nomComplet: string;
-    email: string;
-    juridiction: string;
-    icon: any;
-    color: string;
-  }> = [
-    {
-      id: 'usr-citoyen-1',
-      role: 'citoyen',
-      label: 'Citoyen / Demandeur',
-      nomComplet: 'Dieudonné Mwamba',
-      email: 'dieudonne.mwamba@gmail.com',
-      juridiction: 'Kinshasa / Gombe',
-      icon: User,
-      color: 'bg-sky-50 text-sky-800 border-sky-200'
-    },
-    {
-      id: 'usr-guichet-1',
-      role: 'guichet',
-      label: 'Guichetier Communal',
-      nomComplet: 'Mireille Tshimanga',
-      email: 'guichet.lingwala@justice.gouv.cd',
-      juridiction: 'Commune de Lingwala (Kinshasa)',
-      icon: Building2,
-      color: 'bg-amber-50 text-amber-800 border-amber-200'
-    },
-    {
-      id: 'usr-agent-1',
-      role: 'agent_instructeur',
-      label: 'Agent Instructeur (Greffier)',
-      nomComplet: 'Jean-Paul Kabasele',
-      email: 'jp.kabasele@justice.gouv.cd',
-      juridiction: 'Parquet de Grande Instance de Kinshasa / Gombe',
-      icon: FileText,
-      color: 'bg-indigo-50 text-indigo-800 border-indigo-200'
-    },
-    {
-      id: 'usr-valideur-1',
-      role: 'responsable_valideur',
-      label: 'Magistrat / Procureur',
-      nomComplet: 'Antoine Malamba',
-      email: 'a.malamba@justice.gouv.cd',
-      juridiction: 'Procureur de la République près le TGI Gombe',
-      icon: ShieldCheck,
-      color: 'bg-purple-50 text-purple-800 border-purple-200'
-    },
-    {
-      id: 'usr-admin-1',
-      role: 'administrateur',
-      label: 'Administrateur National',
-      nomComplet: 'Patrick Kasongo',
-      email: 'admin.dsi@justice.gouv.cd',
-      juridiction: 'Direction des Systèmes d\'Information (Ministère Justice)',
-      icon: Sliders,
-      color: 'bg-slate-900 text-white border-slate-700'
-    },
-    {
-      id: 'usr-verif-1',
-      role: 'organisme_verificateur',
-      label: 'Organisme Tiers Vérificateur',
-      nomComplet: 'Claire Dubois',
-      email: 'visas.rdc@diplomatie.be',
-      juridiction: 'Section Consulaire - Ambassade de Belgique',
-      icon: Search,
-      color: 'bg-emerald-50 text-emerald-800 border-emerald-200'
-    }
-  ];
-
   const handleStandardLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier || !password) {
@@ -159,24 +79,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }, 800);
     } else {
       setErrorMsg(result.error || 'Authentification échouée. Vérifiez vos identifiants.');
-    }
-  };
-
-  const handleQuickRoleSelect = async (account: typeof testAccounts[0]) => {
-    setLoading(true);
-    setErrorMsg(null);
-
-    const result = await login(account.email, 'Justice2026!');
-    setLoading(false);
-
-    if (result.success) {
-      setSuccessMsg(`Session authentifiée dans la base SQL pour ${account.nomComplet} (${account.label}).`);
-      setTimeout(() => {
-        onSuccess?.();
-        onClose();
-      }, 700);
-    } else {
-      setErrorMsg(result.error || 'Erreur d\'authentification dans la base de données.');
     }
   };
 
@@ -208,8 +110,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-150 my-8">
+    <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-start justify-center p-4 overflow-y-auto sm:p-6 md:items-center">
+      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-150 my-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -252,30 +154,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600 my-4">
           <button
             onClick={() => { setAuthMode('login'); setErrorMsg(null); }}
-            className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-              authMode === 'login' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
-            }`}
+            className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${authMode === 'login' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+              }`}
           >
             <KeyRound className="w-3.5 h-3.5" />
             <span>Connexion Sécurisée</span>
           </button>
           <button
-            onClick={() => { setAuthMode('quick_roles'); setErrorMsg(null); }}
-            className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-              authMode === 'quick_roles' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-            <span>Sélection Rapide par Rôle</span>
-          </button>
-          <button
             onClick={() => { setAuthMode('register'); setErrorMsg(null); }}
-            className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-              authMode === 'register' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
-            }`}
+            className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${authMode === 'register' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+              }`}
           >
             <UserPlus className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Créer un Compte</span>
+            <span>Créer un Compte Citoyen</span>
           </button>
         </div>
 
@@ -316,9 +207,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-700">
                   Mot de Passe
                 </label>
-                <span className="text-[10px] text-slate-400">
-                  Mot de passe démo: <strong className="text-slate-700 font-mono">Justice2026!</strong>
-                </span>
               </div>
               <input
                 type="password"
@@ -345,54 +233,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               Chaque tentative de connexion génère une trace d'audit non-répudiable dans la table SQL <code className="text-slate-600">actions_audit</code>.
             </p>
           </form>
-        )}
-
-        {/* TAB 2: QUICK TEST ACCOUNTS FROM DATABASE */}
-        {authMode === 'quick_roles' && (
-          <div className="space-y-3">
-            <p className="text-xs text-slate-600 font-medium">
-              Sélectionnez un acteur officiel pour vous authentifier avec son compte pré-enregistré dans la table SQL <code className="text-sky-800 font-mono font-bold">utilisateurs</code> :
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
-              {testAccounts.map((acc) => {
-                const IconComponent = acc.icon;
-                const isSelected = currentUser?.id === acc.id;
-
-                return (
-                  <button
-                    key={acc.id}
-                    onClick={() => handleQuickRoleSelect(acc)}
-                    disabled={loading}
-                    className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-2 hover:border-sky-400 hover:shadow-xs ${
-                      isSelected ? 'bg-sky-50/80 border-sky-300 ring-1 ring-sky-300' : 'bg-slate-50/60 border-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
-                          <IconComponent className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-mono font-bold text-slate-500 uppercase block">
-                            {acc.label}
-                          </span>
-                          <span className="text-xs font-bold text-slate-900 block truncate">
-                            {acc.nomComplet}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-[10px] text-slate-500 border-t border-slate-200/60 pt-1.5 flex items-center justify-between">
-                      <span className="truncate max-w-[170px]">{acc.juridiction}</span>
-                      <ArrowRight className="w-3 h-3 text-sky-600 shrink-0" />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         )}
 
         {/* TAB 3: REGISTER NEW CITIZEN ACCOUNT IN DB */}

@@ -1,7 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
-import path from 'node:path';
-import fs from 'node:fs';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 // Ensure database directory exists
 const dbDir = path.resolve(process.cwd(), 'database');
@@ -22,11 +22,11 @@ function hashPassword(password: string): string {
 
 // Parse arguments or use defaults
 const args = process.argv.slice(2);
-const email = args[0] || 'admin.dsi@justice.gouv.cd';
-const password = args[1] || 'Justice2026!';
-const nom = args[2] || 'Kasongo';
-const prenom = args[3] || 'Patrick';
-const telephone = args[4] || '+243 84 000 0001';
+const email = args[0] || 'admin.jacques@justice.gouv.cd';
+const password = args[1] || 'Jacques2026!';
+const nom = args[2] || 'Jacques';
+const prenom = args[3] || 'Uwonda';
+const telephone = args[4] || '+243 81 234 5678';
 const adminId = 'usr-admin-1';
 const jurisdiction = 'Direction des Systèmes d\'Information - Ministère de la Justice (RDC)';
 

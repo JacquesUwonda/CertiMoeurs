@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
-import { 
-  DemandeCertificat, 
-  ActionAudit, 
-  ParametrageTerritorial, 
-  Role, 
-  StatutDemande, 
-  VerificationPubliqueResult,
-  PieceJointe
+import { useEffect, useState } from 'react';
+import { INITIAL_AUDIT_LOGS, INITIAL_DEMANDES, PARAMETRAGES_PROVINCES } from '../data/mockData';
+import {
+  ActionAudit,
+  DemandeCertificat,
+  ParametrageTerritorial,
+  PieceJointe,
+  Role,
+  StatutDemande,
+  VerificationPubliqueResult
 } from '../types';
-import { INITIAL_DEMANDES, INITIAL_AUDIT_LOGS, PARAMETRAGES_PROVINCES } from '../data/mockData';
 
 export interface DatabaseStatusInfo {
   engine: string;
@@ -37,63 +37,6 @@ const STORAGE_KEYS = {
   ROLE: 'certimoeurs_rdc_current_role_v2',
   CURRENT_USER: 'certimoeurs_rdc_user_profile_v2',
   AUTH_TOKEN: 'certimoeurs_rdc_auth_token_v2'
-};
-
-const DEFAULT_USERS: Record<Role, UserProfile> = {
-  citoyen: {
-    id: 'usr-citoyen-1',
-    nom: 'Mwamba',
-    prenom: 'Dieudonné',
-    email: 'dieudonne.mwamba@gmail.com',
-    telephone: '+243 81 234 5678',
-    role: 'citoyen',
-    juridiction_deleguee: 'Kinshasa / Gombe'
-  },
-  guichet: {
-    id: 'usr-guichet-1',
-    nom: 'Tshimanga',
-    prenom: 'Mireille',
-    email: 'guichet.lingwala@justice.gouv.cd',
-    telephone: '+243 82 000 9911',
-    role: 'guichet',
-    juridiction_deleguee: 'Maison Communale de Lingwala (Kinshasa)'
-  },
-  agent_instructeur: {
-    id: 'usr-agent-1',
-    nom: 'Kabasele',
-    prenom: 'Jean-Paul',
-    email: 'jp.kabasele@justice.gouv.cd',
-    telephone: '+243 81 555 4321',
-    role: 'agent_instructeur',
-    juridiction_deleguee: 'Parquet de Grande Instance de Kinshasa / Gombe'
-  },
-  responsable_valideur: {
-    id: 'usr-valideur-1',
-    nom: 'Malamba',
-    prenom: 'Antoine',
-    email: 'a.malamba@justice.gouv.cd',
-    telephone: '+243 89 000 2233',
-    role: 'responsable_valideur',
-    juridiction_deleguee: 'Procureur de la République près le TGI Kinshasa/Gombe'
-  },
-  administrateur: {
-    id: 'usr-admin-1',
-    nom: 'Kasongo',
-    prenom: 'Patrick',
-    email: 'admin.dsi@justice.gouv.cd',
-    telephone: '+243 84 000 0001',
-    role: 'administrateur',
-    juridiction_deleguee: "Direction des Systèmes d'Information - Ministère de la Justice"
-  },
-  organisme_verificateur: {
-    id: 'usr-verif-1',
-    nom: 'Dubois',
-    prenom: 'Claire',
-    email: 'visas.rdc@diplomatie.be',
-    telephone: '+32 2 501 8111',
-    role: 'organisme_verificateur',
-    juridiction_deleguee: 'Section Consulaire - Ambassade de Belgique'
-  }
 };
 
 export class CertiStore {
@@ -178,29 +121,18 @@ export class CertiStore {
     return !!this.getAuthToken();
   }
 
-  static getRole(): Role {
+  static getRole(): Role | null {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ROLE);
       if (saved) return saved as Role;
     } catch {
       // ignore
     }
-    return 'citoyen';
+    return null;
   }
 
   static async setRole(role: Role) {
-    localStorage.setItem(STORAGE_KEYS.ROLE, role);
-    const defaultUser = DEFAULT_USERS[role];
-    if (defaultUser) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(defaultUser));
-      // Authenticate against database API to log session and update last connection
-      try {
-        await this.login(defaultUser.email, 'Justice2026!');
-      } catch {
-        // fallback
-      }
-    }
-    this.notify();
+    // Deprecated for direct role switching, keep for typing but do nothing without auth
   }
 
   static async login(identifier: string, password = 'Justice2026!'): Promise<{ success: boolean; error?: string; user?: UserProfile }> {
@@ -281,14 +213,14 @@ export class CertiStore {
     this.notify();
   }
 
-  static getCurrentUser(): UserProfile {
+  static getCurrentUser(): UserProfile | null {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
       if (saved) return JSON.parse(saved);
     } catch {
       // ignore
     }
-    return DEFAULT_USERS[this.getRole()];
+    return null;
   }
 
   static setCurrentUser(user: UserProfile) {
@@ -298,7 +230,7 @@ export class CertiStore {
 
   static getUserName(): string {
     const user = this.getCurrentUser();
-    return `${user.prenom} ${user.nom}`;
+    return user ? `${user.prenom} ${user.nom}` : '';
   }
 
   // --- Opérations Métier SQL Backend ---
@@ -323,7 +255,7 @@ export class CertiStore {
           dateChangement: now,
           auteur: `${nouvelleDemande.demandeur.prenom} ${nouvelleDemande.demandeur.nom}`,
           roleAuteur: nouvelleDemande.modeDepot === 'guichet_assiste' ? 'Guichetier Assisté' : 'Demandeur',
-          commentaire: nouvelleDemande.modeDepot === 'guichet_assiste' 
+          commentaire: nouvelleDemande.modeDepot === 'guichet_assiste'
             ? 'Dossier créé et assisté au guichet physique communal'
             : 'Création et soumission en ligne de la demande de certificat'
         }
@@ -354,8 +286,8 @@ export class CertiStore {
 
   static getDemandeParReference(refOrPhone: string): DemandeCertificat | undefined {
     const cleaned = refOrPhone.trim().toLowerCase();
-    return this.inMemoryDemandes.find(d => 
-      d.numeroReference.toLowerCase() === cleaned || 
+    return this.inMemoryDemandes.find(d =>
+      d.numeroReference.toLowerCase() === cleaned ||
       d.id.toLowerCase() === cleaned ||
       d.demandeur.telephone.replace(/\s+/g, '') === cleaned.replace(/\s+/g, '') ||
       d.demandeur.numeroNationalIdentite.toLowerCase() === cleaned ||
@@ -731,14 +663,14 @@ export class CertiStore {
   // --- Vérification Publique Tiers (RG05) ---
   static verifierCertificatPublic(codeOuRef: string): VerificationPubliqueResult {
     const cleaned = codeOuRef.trim().toLowerCase();
-    const match = this.inMemoryDemandes.find(d => 
+    const match = this.inMemoryDemandes.find(d =>
       (d.certificat && d.certificat.numeroCertificat.toLowerCase() === cleaned) ||
       d.numeroReference.toLowerCase() === cleaned ||
       (d.certificat && d.certificat.empreinteHashSHA256.toLowerCase().includes(cleaned))
     );
 
     // Call backend async for audit logging
-    fetch(`/api/verify/${encodeURIComponent(codeOuRef)}`).catch(() => {});
+    fetch(`/api/verify/${encodeURIComponent(codeOuRef)}`).catch(() => { });
 
     if (!match || !match.certificat) {
       return { trouve: false };

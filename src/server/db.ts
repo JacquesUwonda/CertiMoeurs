@@ -1,16 +1,15 @@
-import { DatabaseSync } from 'node:sqlite';
-import path from 'node:path';
 import fs from 'node:fs';
-import { 
-  DemandeCertificat, 
-  ActionAudit, 
-  ParametrageTerritorial, 
-  StatutDemande, 
-  PieceJointe, 
-  VerificationPubliqueResult,
-  Role
-} from '../types';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { INITIAL_DEMANDES, PARAMETRAGES_PROVINCES } from '../data/mockData';
+import {
+  ActionAudit,
+  DemandeCertificat,
+  ParametrageTerritorial,
+  PieceJointe,
+  StatutDemande,
+  VerificationPubliqueResult
+} from '../types';
 
 const DB_DIR = path.resolve(process.cwd(), 'database');
 const DB_FILE = path.join(DB_DIR, 'certimoeurs.sqlite');
@@ -50,9 +49,12 @@ export function initDatabase() {
     `);
   }
 
-  // Check if we need to seed initial records
+  // We will run the seed script if ANY of the main tables are empty
   const checkUsers = db.prepare('SELECT COUNT(*) as count FROM utilisateurs').get() as { count: number };
-  if (checkUsers.count === 0) {
+  const checkParams = db.prepare('SELECT COUNT(*) as count FROM parametres_territoriaux').get() as { count: number };
+  const checkDemandes = db.prepare('SELECT COUNT(*) as count FROM demandes').get() as { count: number };
+
+  if (checkUsers.count === 0 || checkParams.count === 0 || checkDemandes.count === 0) {
     seedInitialData();
   }
 }
@@ -68,7 +70,7 @@ function seedInitialData() {
     }
   }
 
-  // Seed default territorial params if table is empty
+  // Seed default territorial params if table is still empty
   const checkParams = db.prepare('SELECT COUNT(*) as count FROM parametres_territoriaux').get() as { count: number };
   if (checkParams.count === 0) {
     const insertParam = db.prepare(`
@@ -91,7 +93,7 @@ function seedInitialData() {
     }
   }
 
-  // Seed baseline initial demandes
+  // Seed baseline initial demandes if table is empty
   const checkDemandes = db.prepare('SELECT COUNT(*) as count FROM demandes').get() as { count: number };
   if (checkDemandes.count === 0) {
     for (const d of INITIAL_DEMANDES) {
@@ -499,10 +501,10 @@ function hydrateDemande(r: any): DemandeCertificat {
 }
 
 export function updateDemandeStatut(
-  demandeId: string, 
-  nouveauStatut: StatutDemande, 
-  auteur: string, 
-  roleAuteur: string, 
+  demandeId: string,
+  nouveauStatut: StatutDemande,
+  auteur: string,
+  roleAuteur: string,
   commentaire: string
 ) {
   const now = new Date().toISOString();
@@ -542,10 +544,10 @@ export function agentPrendreEnChargeSQL(demandeId: string, nomAgent: string, age
 }
 
 export function agentVerifierCasierSQL(
-  demandeId: string, 
-  nomAgent: string, 
-  mention: 'NEANT' | 'CONDAMNATION_EXISTANTE', 
-  registreRef: string, 
+  demandeId: string,
+  nomAgent: string,
+  mention: 'NEANT' | 'CONDAMNATION_EXISTANTE',
+  registreRef: string,
   parquetLieu: string
 ) {
   const now = new Date().toISOString();
@@ -608,7 +610,7 @@ export function citoyenDeposerComplementSQL(demandeId: string, pieces: PieceJoin
   `);
   for (const p of pieces) {
     insertPiece.run(
-      p.id || `p-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      p.id || `p-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       demandeId,
       p.type,
       p.nomFichier,
@@ -639,7 +641,7 @@ export function citoyenDeposerComplementSQL(demandeId: string, pieces: PieceJoin
 export function agentProposerDecisionSQL(demandeId: string, nomAgent: string, avis: 'FAVORABLE' | 'DEFAVORABLE', note: string) {
   const now = new Date().toISOString();
   const nouveauStatut: StatutDemande = avis === 'FAVORABLE' ? 'avis_favorable' : 'avis_defavorable';
-  
+
   updateDemandeStatut(demandeId, nouveauStatut, nomAgent, 'Agent Instructeur', `Instruction terminée. Avis motivé: ${avis}. ${note}`);
 
   db.prepare(`
@@ -661,9 +663,9 @@ export function agentProposerDecisionSQL(demandeId: string, nomAgent: string, av
 }
 
 export function responsableValiderEtDelivrerSQL(
-  demandeId: string, 
-  responsableNom: string, 
-  titreResponsable: string, 
+  demandeId: string,
+  responsableNom: string,
+  titreResponsable: string,
   autoriteEmettrice: string
 ) {
   const now = new Date();
@@ -717,10 +719,10 @@ export function responsableValiderEtDelivrerSQL(
   );
 
   updateDemandeStatut(
-    demandeId, 
-    'approuve', 
-    `${responsableNom} (${titreResponsable})`, 
-    'Responsable Valideur', 
+    demandeId,
+    'approuve',
+    `${responsableNom} (${titreResponsable})`,
+    'Responsable Valideur',
     `Certificat de bonne vie et mœurs validé, signé numériquement avec scellé d'État.`
   );
 
@@ -734,10 +736,10 @@ export function responsableValiderEtDelivrerSQL(
 }
 
 export function responsableRejeterSQL(
-  demandeId: string, 
-  responsableNom: string, 
-  titreResponsable: string, 
-  motif: string, 
+  demandeId: string,
+  responsableNom: string,
+  titreResponsable: string,
+  motif: string,
   voiesRecours: string
 ) {
   const now = new Date().toISOString();
@@ -764,10 +766,10 @@ export function responsableRejeterSQL(
   );
 
   updateDemandeStatut(
-    demandeId, 
-    'rejete', 
-    `${responsableNom} (${titreResponsable})`, 
-    'Responsable Valideur', 
+    demandeId,
+    'rejete',
+    `${responsableNom} (${titreResponsable})`,
+    'Responsable Valideur',
     `Demande rejetée: ${motif}. Voies de recours légales notifiées.`
   );
 
@@ -928,17 +930,17 @@ export function updateParametresSQL(params: ParametrageTerritorial[]) {
 
 export function getDatabaseStatus() {
   const tables = [
-    'utilisateurs', 
-    'demandes', 
-    'pieces_jointes', 
-    'historique_statuts', 
-    'biometrie', 
-    'paiements', 
-    'instructions', 
-    'decisions', 
-    'certificats', 
-    'verifications', 
-    'actions_audit', 
+    'utilisateurs',
+    'demandes',
+    'pieces_jointes',
+    'historique_statuts',
+    'biometrie',
+    'paiements',
+    'instructions',
+    'decisions',
+    'certificats',
+    'verifications',
+    'actions_audit',
     'parametres_territoriaux'
   ];
 
@@ -978,7 +980,7 @@ export function getStatsAggregatesSQL() {
   const totalDelivres = (db.prepare("SELECT COUNT(*) as count FROM demandes WHERE statut_actuel = 'approuve'").get() as any).count;
   const totalRejetes = (db.prepare("SELECT COUNT(*) as count FROM demandes WHERE statut_actuel = 'rejete'").get() as any).count;
   const totalEnInstruction = (db.prepare("SELECT COUNT(*) as count FROM demandes WHERE statut_actuel IN ('soumis', 'en_cours_instruction', 'verification_judiciaire', 'complement_requis', 'avis_favorable', 'avis_defavorable')").get() as any).count;
-  
+
   const byProvince = db.prepare(`
     SELECT ville_province, COUNT(*) as count 
     FROM demandes 

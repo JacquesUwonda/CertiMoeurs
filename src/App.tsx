@@ -1,26 +1,44 @@
 import React, { useState } from 'react';
-import { Header } from './components/common/Header';
-import { Footer } from './components/common/Footer';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { InstructorPortal } from './components/agent/InstructorPortal';
+import { AuthModal } from './components/auth/AuthModal';
 import { CitizenPortal } from './components/citizen/CitizenPortal';
 import { NewApplicationWizard } from './components/citizen/NewApplicationWizard';
-import { TrackingView } from './components/tracking/TrackingView';
+import { Footer } from './components/common/Footer';
+import { Header } from './components/common/Header';
 import { GuichetPortal } from './components/guichet/GuichetPortal';
-import { InstructorPortal } from './components/agent/InstructorPortal';
+import { LandingPage } from './components/public/LandingPage';
+import { TrackingView } from './components/tracking/TrackingView';
 import { ValidatorPortal } from './components/validator/ValidatorPortal';
 import { PublicVerificationPortal } from './components/verifier/PublicVerificationPortal';
-import { AdminDashboard } from './components/admin/AdminDashboard';
-import { DemandeCertificat, Role } from './types';
 import { useCertiStore } from './services/store';
-import { AuthModal } from './components/auth/AuthModal';
+import { DemandeCertificat } from './types';
 
 export function App() {
   const { currentRole, setRole, isAuthenticated, currentUser } = useCertiStore();
-  const [currentTab, setCurrentTab] = useState<string>('citizen');
+  const [currentTab, setCurrentTab] = useState<string>('landing');
   const [isAssistedKiosk, setIsAssistedKiosk] = useState(false);
   const [trackingDemande, setTrackingDemande] = useState<DemandeCertificat | undefined>(undefined);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalReason, setAuthModalReason] = useState<string | undefined>(undefined);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [pendingStartWizard, setPendingStartWizard] = useState(false);
+
+  // Auto-redirect based on authentication state
+  React.useEffect(() => {
+    if (isAuthenticated && currentRole) {
+      if (currentRole === 'guichet') setCurrentTab('guichet');
+      else if (currentRole === 'agent_instructeur') setCurrentTab('instructor');
+      else if (currentRole === 'responsable_valideur') setCurrentTab('validator');
+      else if (currentRole === 'administrateur') setCurrentTab('admin');
+      else if (currentRole === 'organisme_verificateur') setCurrentTab('verify');
+      else if (currentTab === 'landing' || currentTab === 'citizen') setCurrentTab('citizen');
+    } else {
+      if (currentTab !== 'verify' && currentTab !== 'tracking') {
+        setCurrentTab('landing');
+      }
+    }
+  }, [isAuthenticated, currentRole]);
 
   const handleStartNewApplication = (assisted = false) => {
     if (!assisted) {
@@ -71,6 +89,11 @@ export function App() {
           else setCurrentTab('citizen');
         }}
         onOpenAssistedKiosk={() => handleStartNewApplication(true)}
+        onLoginRequest={() => {
+          setAuthModalMode('login');
+          setAuthModalReason(undefined);
+          setAuthModalOpen(true);
+        }}
       />
 
       {/* Main Content Area */}
@@ -88,10 +111,27 @@ export function App() {
           </div>
         )}
 
+        {currentTab === 'landing' && (
+          <LandingPage
+            onStartNewApplication={() => handleStartNewApplication(false)}
+            onOpenAssistedKiosk={() => handleStartNewApplication(true)}
+            onViewDemande={handleViewDemandeFromPortal}
+            onLoginRequest={() => {
+              setAuthModalMode('login');
+              setAuthModalReason(undefined);
+              setAuthModalOpen(true);
+            }}
+            onRegisterRequest={() => {
+              setAuthModalMode('register');
+              setAuthModalReason(undefined);
+              setAuthModalOpen(true);
+            }}
+          />
+        )}
+
         {currentTab === 'citizen' && (
           <CitizenPortal
             onStartNewApplication={() => handleStartNewApplication(false)}
-            onOpenAssistedKiosk={() => handleStartNewApplication(true)}
             onViewDemande={handleViewDemandeFromPortal}
           />
         )}
@@ -143,7 +183,7 @@ export function App() {
         }}
         onSuccess={handleAuthSuccess}
         reason={authModalReason}
-        initialMode="login"
+        initialMode={authModalMode}
       />
     </div>
   );

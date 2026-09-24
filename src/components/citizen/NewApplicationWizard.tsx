@@ -1,29 +1,29 @@
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  FileCheck,
+  FileText,
+  Scan,
+  ShieldCheck,
+  Trash2,
+  UploadCloud,
+  User
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useCertiStore } from '../../services/store';
-import { 
-  DemandeCertificat, 
-  PieceJointe, 
-  TypePieceIdentite, 
-  VerificationBiometrique, 
-  PaiementMobile 
+import {
+  DemandeCertificat,
+  PaiementMobile,
+  PieceJointe,
+  TypePieceIdentite,
+  VerificationBiometrique
 } from '../../types';
 import { BiometricVerificationModal } from '../biometrics/BiometricVerificationModal';
 import { MobilePaymentModal } from '../payment/MobilePaymentModal';
-import { 
-  User, 
-  UploadCloud, 
-  Scan, 
-  CreditCard, 
-  CheckCircle2, 
-  ArrowRight, 
-  ArrowLeft, 
-  FileText, 
-  Trash2, 
-  AlertTriangle,
-  Clock,
-  ShieldCheck,
-  FileCheck
-} from 'lucide-react';
 
 interface NewApplicationWizardProps {
   onSuccess: (demande: DemandeCertificat) => void;
@@ -122,7 +122,15 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
   const [createdDemande, setCreatedDemande] = useState<DemandeCertificat | null>(null);
 
   // Active province configuration
-  const currentParam = parametres.find(p => p.province.toLowerCase() === formData.villeProvince.toLowerCase()) || parametres[0];
+  const currentParam = parametres.find(p => p.province.toLowerCase() === formData.villeProvince.toLowerCase()) || parametres[0] || {
+    province: 'Kinshasa',
+    communes: ['Centre'],
+    autoriteDeleguee: 'Autorité par défaut',
+    montantTaxeCDF: 0,
+    delaiCibleHeures: 48,
+    piecesObligatoires: [],
+    telephoneAssistance: ''
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -223,13 +231,12 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
               <div key={st.num} className="flex items-center flex-1 last:flex-none">
                 <div className="flex flex-col items-center">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs transition-all ${
-                      isCompleted
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : isCurrent
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs transition-all ${isCompleted
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : isCurrent
                         ? 'bg-sky-600 text-white shadow-md ring-4 ring-sky-100'
                         : 'bg-slate-100 text-slate-400'
-                    }`}
+                      }`}
                   >
                     {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
                   </div>
@@ -239,9 +246,8 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
                 </div>
                 {idx < 4 && (
                   <div
-                    className={`flex-1 h-0.5 mx-2 sm:mx-4 transition-colors ${
-                      currentStep > st.num ? 'bg-emerald-500' : 'bg-slate-200'
-                    }`}
+                    className={`flex-1 h-0.5 mx-2 sm:mx-4 transition-colors ${currentStep > st.num ? 'bg-emerald-500' : 'bg-slate-200'
+                      }`}
                   />
                 )}
               </div>
@@ -631,7 +637,7 @@ export const NewApplicationWizard: React.FC<NewApplicationWizardProps> = ({
                     Certificat ou Attestation de Résidence *
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    Délivré par le Bourgmestre ou Chef de quartier de {formData.commune}
+                    Délivré par le Bourgmestre ou Chef de quartier de {formData.commune || currentParam?.communes?.[0] || 'la commune'}
                   </div>
                   {pieces.find(p => p.type === 'attestation_residence') && (
                     <div className="mt-1 text-xs font-mono text-emerald-700 flex items-center gap-1">
